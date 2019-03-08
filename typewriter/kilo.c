@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <string.h>
+#include <sys/types.h>
 
 // *********************************** defines ********************
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -56,10 +57,20 @@ void abFree(struct abuf *ab)
 // ********************************* data **********************************
 struct termios orig_termios;
 
+// For storing the row in a editor
+typedef struct erow {
+    int size;
+    char *chars;
+}erow;
+
+
+
 struct editorConfig {
     int cx , cy;             //for the current position of the cursor; cx - horizontal ; cy - vertical
     int screenrows;
     int screencols;
+    int numrows;
+    erow row;
     struct termios orig_termios;
 };
 
@@ -208,6 +219,33 @@ int getWindowSize (int *rows , int *cols)   {
     }    
 }
 
+// *******************************io file **************************
+
+void editorOpen (char *filename){
+    FILE *fp = fopen(filename , "r");
+    if (!fp) die("fopen");
+
+    char *line = NULL;
+    ssize_t linecap = 0;
+    ssize_t linelen;
+    linelen = getline(&line , &linecap , fp);
+
+    if (linelen != -1){
+        //decrease linelen until last character is newline or '\r'
+        while(linelen > 0 && (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
+        linelen--;
+
+        //copy the line in the editor row
+        E.row.size = linelen;
+        E.row.chars = malloc(linelen + 1);
+        memcpy(E.row.chars, line, linelen);
+        E.row.chars[linelen] = '\0';
+        E.numrows = 1;
+    }
+    free(line);
+    fclose(fp);
+}
+
 // *****************************input *****************************
 // for moving the cursor using the keys w,a,s,d
 void editorMoveCursor(int key)
@@ -274,24 +312,32 @@ void editorDrawRows( struct abuf *ab){
     //printing the tildas upto last line - 1 and then printing simply the tilda at the last
     for (int y = 0 ; y < E.screenrows ; y++)
     {
-        if (y == E.screenrows / 3){
-            char welcome[80];
-            int welcomelen = snprintf(welcome , sizeof(welcome) , 
-            "Arpit Editor -- version %s" , Arpit_editor_version);
-            if (welcomelen > E.screencols) welcomelen = E.screencols;
+        //this is for printing the editor name on the terminal
+        if (y >= E.numrows ){
+            if (y == E.screenrows / 3){
+                char welcome[80];
+                int welcomelen = snprintf(welcome , sizeof(welcome) , 
+                "Arpit Editor -- version %s" , Arpit_editor_version);
+                if (welcomelen > E.screencols) welcomelen = E.screencols;
 
-            // for centering the welcome message
-            int padding = (E.screencols - welcomelen)/2;
-            if (padding){
+                // for centering the welcome message
+                int padding = (E.screencols - welcomelen)/2;
+                if (padding){
+                    abAppend(ab , "~" , 1);
+                    padding--;
+                }
+                while(padding--)
+                    abAppend(ab , " " , 1);
+                abAppend(ab, welcome , welcomelen);
+            }else {
                 abAppend(ab , "~" , 1);
-                padding--;
             }
-            while(padding--)
-                abAppend(ab , " " , 1);
-            abAppend(ab, welcome , welcomelen);
+            
         }
         else{
-            abAppend(ab , "~" , 1);
+            int len = E.row.size;
+            if (len > E.screencols) len = E.screencols;
+            abAppend(ab,  E.row.chars , len);
         }
         abAppend(ab , "\x1b[K" , 3);                    //print the tilda and then clear the line to the right of the cursor
                                                        //by defualt it ersases to the right of the cursor
@@ -299,8 +345,6 @@ void editorDrawRows( struct abuf *ab){
             abAppend(ab , "\r\n" , 2);
         }
     }
-    
-    
 }
 
 
@@ -330,6 +374,7 @@ void editorRefreshScreen (){
 void initEditor() {
     E.cx = 0;                         //horizontal is x
     E.cy = 0;                         //vertical is y
+    E.numrows = 0;
     if (getWindowSize(&E.screenrows , &E.screencols) == -1) die("get window size");
 }
 
@@ -340,10 +385,14 @@ void initEditor() {
 
 // ********************************** main *********************************
 
-int main() 
+int main(int argc , char *argv[]) 
 {
   enableRawMode();
   initEditor();
+
+  if (argc >= 2){
+      editorOpen(argv[1]);
+  }
   char c;
   
   while (1){
