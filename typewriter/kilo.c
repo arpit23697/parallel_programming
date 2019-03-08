@@ -14,8 +14,9 @@
 
 // *********************************** defines ********************
 #define CTRL_KEY(k) ((k) & 0x1f)
-
+#define TAB_STOP 8
 #define Arpit_editor_version "0.0.1"
+
 
 enum editorKey {
     ARROW_LEFT = 1000,
@@ -64,13 +65,16 @@ struct termios orig_termios;
 // For storing the row in a editor
 typedef struct erow {
     int size;
+    int rsize;
     char *chars;
+    char *render;
 }erow;
 
 
 
 struct editorConfig {
     int cx , cy;             //for the current position of the cursor; cx - horizontal ; cy - vertical on the file
+    int rx;                 //current cursor position in the render; will be greater than cx if tabs have extra space
     int screenrows;
     int screencols;
     int numrows;
@@ -225,6 +229,56 @@ int getWindowSize (int *rows , int *cols)   {
     }    
 }
 // ******************************* row operations ******************
+//function to convert cx to rx
+int editorRowCxToRx (erow *row , int cx){
+    int rx = 0;
+    for (int j =0 ; j < cx ; j++){
+        if (row->chars[j] == '\t')
+            rx += (TAB_STOP - 1) - (rx % TAB_STOP);
+        rx++;
+    }
+    return rx;
+}
+
+
+
+void editorUpdateRow(erow *row){
+
+    //count number of tabs
+    //useful in knowing how much memory to give to render
+    int tabs = 0;
+    for (int j =0 ; j < row->size ; j++)
+        if (row->chars[j] == '\t') tabs++;
+
+
+    free(row->render);
+    row->render = malloc(row->size + tabs * (TAB_STOP -1) +  1);      //tab is 8 spaces
+
+    int idx = 0;
+    //just copy the character in the render
+    for (int j = 0; j < row->size ; j++){
+        //if the character is the tab then print the space until idx is divisible by 8
+        if (row->chars[j] == '\t'){
+            row->render[idx++] = ' ';
+            while (idx % TAB_STOP != 0) row->render[idx++] = ' ';
+        }
+        else
+        row->render[idx++] = row->chars[j];
+    }
+
+    row->render[idx] = '\0';
+    row->rsize =idx;                //setting the size of the render
+}
+
+
+
+
+
+
+
+
+
+
 void editorAppendRow (char *s, size_t len)
 {
     //copy the line in the editor row
@@ -235,6 +289,10 @@ void editorAppendRow (char *s, size_t len)
     E.row[at].chars = malloc(len + 1);
     memcpy(E.row[at].chars, s, len);
     E.row[at].chars[len] = '\0';
+
+    E.row[at].rsize= 0;
+    E.row[at].render = NULL;
+    editorUpdateRow(&E.row[at]);
     E.numrows++;
 }
 
@@ -342,17 +400,23 @@ void editorProcessKeypress () {
 // ****************************** output ********************************
 void editorScroll(){
     //E.cy give the cursor position
+    E.rx = 0;
+    //if in the file
+    if (E.cy < E.numrows){
+        E.rx = editorRowCxToRx(&E.row[E.cy] , E.cx);
+    }
+
     if (E.cy < E.rowoff){           //to check if the cursor is above the visible window
         E.rowoff = E.cy;
     }
     if (E.cy >= E.rowoff + E.screenrows){         //to check if the cursor is below the visible window
         E.rowoff = E.cy - E.screenrows + 1;
     }
-    if (E.cx < E.coloff){
-        E.coloff = E.cx;
+    if (E.rx < E.coloff){
+        E.coloff = E.rx;
     }
-    if (E.cx >= E.coloff + E.screencols){
-        E.coloff = E.cx - E.screencols + 1;
+    if (E.rx >= E.coloff + E.screencols){
+        E.coloff = E.rx - E.screencols + 1;
     }
 }
 
@@ -388,10 +452,10 @@ void editorDrawRows( struct abuf *ab){
             
         }
         else{
-            int len = E.row[filerow].size - E.coloff;
+            int len = E.row[filerow].rsize - E.coloff;
             if (len < 0) len = 0;
             if (len > E.screencols) len = E.screencols;
-            abAppend(ab,  &E.row[filerow].chars[E.coloff] , len);
+            abAppend(ab,  &E.row[filerow].render[E.coloff] , len);
         }
         abAppend(ab , "\x1b[K" , 3);                    //print the tilda and then clear the line to the right of the cursor
                                                        //by defualt it ersases to the right of the cursor
@@ -414,7 +478,7 @@ void editorRefreshScreen (){
     editorDrawRows(&ab);
     
     char buf[32];                                    //for positioning the cursor at the current position
-    snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , (E.cy - E.rowoff) + 1 , (E.cx - E.coloff) + 1);
+    snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , (E.cy - E.rowoff) + 1 , (E.rx - E.coloff) + 1);
     abAppend(&ab , buf , strlen(buf));
 
 
@@ -429,6 +493,7 @@ void editorRefreshScreen (){
 void initEditor() {
     E.cx = 0;                         //horizontal is x
     E.cy = 0;                         //vertical is y
+    E.rx = 0;
     E.numrows = 0;
     E.rowoff = 0;
     E.coloff = 0;
