@@ -376,11 +376,20 @@ void editorProcessKeypress () {
             break;
 
         case END_KEY:
-            E.cx = E.screencols - 1;
+            if (E.cy < E.numrows)
+                E.cx = E.row[E.cy].size;
             break;
         case PAGE_UP:
         case PAGE_DOWN:
         {
+            //place the cursor at the top or the bottom of the terminal and then search the whole page worth of screencols
+            if (c == PAGE_UP){
+                E.cy = E.rowoff;
+            }else if (c == PAGE_DOWN){
+                E.cy = E.rowoff + E.screencols - 1;
+                if (E.cy > E.numrows) E.cy = E.numrows;
+            }
+
             int times = E.screenrows;
             while (times--){
                 editorMoveCursor(c == PAGE_UP ? ARROW_UP : ARROW_DOWN);
