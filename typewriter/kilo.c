@@ -5,10 +5,38 @@
 #include <stdio.h>
 #include <errno.h>
 #include <sys/ioctl.h>
+#include <string.h>
 
 // *********************************** defines ********************
 #define CTRL_KEY(k) ((k) & 0x1f)
+// ********************************** append buffer ***************************
 
+//this struct is for creating the dynamic string with only one operation append
+struct abuf
+{
+    char *b;
+    int len;
+};
+
+#define ABUF_INIT {NULL, 0}; //empty buffer; acts as a constructor
+
+// this is for appending the string s of lenght len to the buffer ab
+void abAppend(struct abuf *ab, const char *s, int len)
+{
+    char *new = realloc(ab->b, ab->len + len); //this is for dynamically allocated memory
+
+    if (new == NULL)
+        return;
+    memcpy(&new[ab->len], s, len); //appending the string of len s in new address
+    ab->b = new;                   //changing the address and the length
+    ab->len += len;
+}
+
+// for freeing the buffer
+void abFree(struct abuf *ab)
+{
+    free(ab->b);
+}
 
 // ********************************* data **********************************
 struct termios orig_termios;
@@ -82,8 +110,6 @@ int getCursorPosition (int *rows , int *cols)
     if (write(STDOUT_FILENO , "\x1b[6n" , 4) != 4) return -1;           //this queries the cursor position
                                                                 //first we place the cursor at the bottom right 
                                                                 // and then ask the cursor position to get the size of the terminal
-    printf("\r\n");
-    char c;
     //reads the query response until R is encountered and put it in the buffer buf
     while (i < sizeof(buf) - 1){
         if (read(STDIN_FILENO , &buf[i], 1) != 1) break;
@@ -91,11 +117,10 @@ int getCursorPosition (int *rows , int *cols)
         i++;
     }
 
-    // for printing the buffer
+    // appending the buffer with the last '\0' end of string
     buf[i] = '\0';
-    printf("\r\n&buf[1] : '%s'\r\n" , &buf[1]);           //it starts with buf[1] because 0th character is the escape sequence
     
-    //parsing the buffer for the cursor position; returning the error if not able to read properly
+    //parsing the buffer for the cursor position; returning     the error if not able to read properly
     //second line ; parse a string of the form (int;int)
     if (buf[0] != '\x1b' || buf[1] != '[') return -1;
     if (sscanf(&buf[2] , "%d;%d" , rows,cols) != 2) return -1;
@@ -106,6 +131,8 @@ int getCursorPosition (int *rows , int *cols)
 // gets the size of the window and put it in rows and cols
 int getWindowSize (int *rows , int *cols)   {
     struct winsize ws;
+
+    // second method is the fallback method; it executes if the first method fails
     if (ioctl(STDOUT_FILENO , TIOCGWINSZ , &ws ) == -1 || ws.ws_col == 0){
         if (write(STDOUT_FILENO , "\x1b[999C\x1b[999B" , 12) != 12) return -1;        //C is for moving right and B is for moving downword
         return getCursorPosition(rows, cols);
@@ -134,26 +161,39 @@ void editorProcessKeypress () {
 }
 
 // ****************************** output ********************************
-void editorDrawRows(){
+void editorDrawRows( struct abuf *ab){
+    //printing the tildas upto last line - 1 and then printing simply the tilda at the last
     for (int y = 0 ; y < E.screenrows -1 ; y++)
-        write(STDOUT_FILENO , "~\r\n" , 3);
+        abAppend (ab , "~\r\n" , 3);
     
-    write(STDOUT_FILENO , "~" , 1);
+    abAppend(ab , "~" , 1);
 }
 
 
 void editorRefreshScreen (){
-    write (STDOUT_FILENO , "\x1b[1J" , 4);
-    write (STDOUT_FILENO ,"\x1b[H" , 3);
+    // doing using the struct abuf
+    struct abuf ab = ABUF_INIT;
 
-    editorDrawRows();
-    write(STDOUT_FILENO , "\x1b[H" , 3);              //for repositioning of the cursor
+    abAppend (&ab , "\x1b[1J" , 4);                  //clear the screen
+    abAppend(&ab , "\x1b[H" , 3);                    //put the cursor at the top of the screen
+    
+    editorDrawRows(&ab);
+    abAppend(&ab , "\x1b[H" , 3);              //for repositioning of the cursor
+
+    //writing to the terminal in one go
+    write(STDOUT_FILENO , ab.b , ab.len);
+    abFree(&ab);
 }
 
 // ********************************** init ****************************
 void initEditor() {
     if (getWindowSize(&E.screenrows , &E.screencols) == -1) die("get window size");
 }
+
+
+
+
+
 
 // ********************************** main *********************************
 
