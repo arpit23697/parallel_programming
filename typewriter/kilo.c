@@ -12,6 +12,13 @@
 
 #define Arpit_editor_version "0.0.1"
 
+enum editorKey {
+    ARROW_LEFT = 1000,
+    ARROW_RIGHT,
+    ARROW_UP,
+    ARROW_DOWN
+
+};
 // ********************************** append buffer ***************************
 
 //this struct is for creating the dynamic string with only one operation append
@@ -45,6 +52,7 @@ void abFree(struct abuf *ab)
 struct termios orig_termios;
 
 struct editorConfig {
+    int cx , cy;             //for the current position of the cursor; cx - horizontal ; cy - vertical
     int screenrows;
     int screencols;
     struct termios orig_termios;
@@ -92,7 +100,7 @@ void enableRawMode () {
 }
 
 // reads a single key press and then return the result
-char editorReadKey (){
+int editorReadKey (){
     int nread;
     char c;
 
@@ -100,6 +108,26 @@ char editorReadKey (){
         if (nread == -1 && errno != EAGAIN) die("read");   //give the error message if failed in reading
     }
     
+    //for reading the escape sequences
+    if (c == '\x1b'){
+        char seq[3];
+
+        if (read(STDIN_FILENO , &seq[0] , 1) != 1) return '\x1b';
+        if (read(STDIN_FILENO , &seq[1] , 1) != 1) return '\x1b';
+
+        if (seq[0] == '[')
+        {
+            switch(seq[1]){
+                case 'A': return ARROW_UP;
+                case 'B': return ARROW_DOWN;
+                case 'C': return ARROW_RIGHT;
+                case 'D': return ARROW_LEFT;
+            }
+        }
+
+        return '\x1b';
+    }
+    else
     return c;
 }
 
@@ -150,15 +178,40 @@ int getWindowSize (int *rows , int *cols)   {
 }
 
 // *****************************input *****************************
+// for moving the cursor using the keys w,a,s,d
+void editorMoveCursor(int key)
+{
+    switch(key){
+        case ARROW_LEFT:
+            E.cx--;
+            break;
+        case ARROW_RIGHT:
+            E.cx++;
+            break;
+        case ARROW_UP:
+            E.cy--;
+            break;
+        case ARROW_DOWN:
+            E.cy++;
+            break;
+    }
+}
+
 //this function map the control sequences to the appropriate function
 void editorProcessKeypress () {
-    char c = editorReadKey();
+    int c = editorReadKey();
     // printf("%c" , c);
     switch (c){
         case CTRL_KEY('q'):
             write(STDERR_FILENO , "\x1b[2J" , 4);              //for clearing the screen
             write(STDERR_FILENO , "\x1b[H" , 3);               //for placing the cursor at the top of the screen
             exit(0);
+            break;
+        case ARROW_UP:
+        case ARROW_DOWN:
+        case ARROW_LEFT:
+        case ARROW_RIGHT:
+            editorMoveCursor(c);
             break;
     }
 }
@@ -207,7 +260,12 @@ void editorRefreshScreen (){
     abAppend(&ab , "\x1b[H" , 3);                    //put the cursor at the top of the screen
     
     editorDrawRows(&ab);
-    abAppend(&ab , "\x1b[H" , 3);              //for repositioning of the cursor
+    
+    char buf[32];                                    //for positioning the cursor at the current position
+    snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , E.cy + 1 , E.cx + 1);
+    abAppend(&ab , buf , strlen(buf));
+
+
     abAppend(&ab , "\x1b[?25h" , 6);                //for turning on the cursor
 
     //writing to the terminal in one go
@@ -217,6 +275,8 @@ void editorRefreshScreen (){
 
 // ********************************** init ****************************
 void initEditor() {
+    E.cx = 0;                         //horizontal is x
+    E.cy = 0;                         //vertical is y
     if (getWindowSize(&E.screenrows , &E.screencols) == -1) die("get window size");
 }
 
