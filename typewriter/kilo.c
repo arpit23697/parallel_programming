@@ -75,6 +75,7 @@ struct editorConfig {
     int screencols;
     int numrows;
     int rowoff;              //for the offset to which the typewriters is currently scrolled to 
+    int coloff;              //columnoffset for the horizontal scrolling
     erow* row;               //for storing multiple lines
     struct termios orig_termios;
 };
@@ -270,7 +271,6 @@ void editorMoveCursor(int key)
             E.cx--;
             break;
         case ARROW_RIGHT:
-            if (E.cx != E.screencols - 1)
             E.cx++;
             break;
         case ARROW_UP:
@@ -330,6 +330,12 @@ void editorScroll(){
     if (E.cy >= E.rowoff + E.screenrows){         //to check if the cursor is below the visible window
         E.rowoff = E.cy - E.screenrows + 1;
     }
+    if (E.cx < E.coloff){
+        E.coloff = E.cx;
+    }
+    if (E.cx >= E.coloff + E.screencols){
+        E.coloff = E.cx - E.screencols + 1;
+    }
 }
 
 
@@ -364,9 +370,10 @@ void editorDrawRows( struct abuf *ab){
             
         }
         else{
-            int len = E.row[filerow].size;
+            int len = E.row[filerow].size - E.coloff;
+            if (len < 0) len = 0;
             if (len > E.screencols) len = E.screencols;
-            abAppend(ab,  E.row[filerow].chars , len);
+            abAppend(ab,  &E.row[filerow].chars[E.coloff] , len);
         }
         abAppend(ab , "\x1b[K" , 3);                    //print the tilda and then clear the line to the right of the cursor
                                                        //by defualt it ersases to the right of the cursor
@@ -389,7 +396,7 @@ void editorRefreshScreen (){
     editorDrawRows(&ab);
     
     char buf[32];                                    //for positioning the cursor at the current position
-    snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , (E.cy - E.rowoff) + 1 , E.cx + 1);
+    snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , (E.cy - E.rowoff) + 1 , (E.cx - E.coloff) + 1);
     abAppend(&ab , buf , strlen(buf));
 
 
@@ -406,6 +413,7 @@ void initEditor() {
     E.cy = 0;                         //vertical is y
     E.numrows = 0;
     E.rowoff = 0;
+    E.coloff = 0;
     E.row = NULL;
     if (getWindowSize(&E.screenrows , &E.screencols) == -1) die("get window size");
 }

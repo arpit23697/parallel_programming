@@ -1,8 +1,4 @@
-will unblock all of the blocked threads. The function
-int pthread cond wait(
-pthread cond t∗
-pthread mutex t∗
-cond var p
+will unblock all of the blocked threads. The functionint pthread cond wait(pthread cond t∗pthread mutex t∗cond var p
 mutex p
 /∗ in/out ∗/,
 /∗ in/out ∗/);
