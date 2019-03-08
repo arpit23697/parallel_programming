@@ -74,6 +74,7 @@ struct editorConfig {
     int screenrows;
     int screencols;
     int numrows;
+    int rowoff;              //for the offset to which the typewriters is currently scrolled to 
     erow* row;               //for storing multiple lines
     struct termios orig_termios;
 };
@@ -277,7 +278,7 @@ void editorMoveCursor(int key)
             E.cy--;
             break;
         case ARROW_DOWN:
-            if (E.cy != E.screenrows - 1)
+            if (E.cy < E.numrows)             //do not go past the file //it now represents the position of the cursor on the text file
             E.cy++;
             break;
     }
@@ -321,12 +322,25 @@ void editorProcessKeypress () {
 }
 
 // ****************************** output ********************************
+void editorScroll(){
+    //E.cy give the cursor position
+    if (E.cy < E.rowoff){           //to check if the cursor is above the visible window
+        E.rowoff = E.cy;
+    }
+    if (E.cy >= E.rowoff + E.screenrows){         //to check if the cursor is below the visible window
+        E.rowoff = E.cy - E.screenrows + 1;
+    }
+}
+
+
+
 void editorDrawRows( struct abuf *ab){
     //printing the tildas upto last line - 1 and then printing simply the tilda at the last
     for (int y = 0 ; y < E.screenrows ; y++)
     {
         //this is for printing the editor name on the terminal
-        if (y >= E.numrows ){
+        int filerow = y + E.rowoff;
+        if (filerow >= E.numrows ){
 
             //display the welcome message only when the file is opened
             if (E.numrows == 0 && y == E.screenrows / 3){
@@ -350,9 +364,9 @@ void editorDrawRows( struct abuf *ab){
             
         }
         else{
-            int len = E.row[y].size;
+            int len = E.row[filerow].size;
             if (len > E.screencols) len = E.screencols;
-            abAppend(ab,  E.row[y].chars , len);
+            abAppend(ab,  E.row[filerow].chars , len);
         }
         abAppend(ab , "\x1b[K" , 3);                    //print the tilda and then clear the line to the right of the cursor
                                                        //by defualt it ersases to the right of the cursor
@@ -364,6 +378,7 @@ void editorDrawRows( struct abuf *ab){
 
 
 void editorRefreshScreen (){
+    editorScroll();
     // doing using the struct abuf
     struct abuf ab = ABUF_INIT;
 
@@ -374,7 +389,7 @@ void editorRefreshScreen (){
     editorDrawRows(&ab);
     
     char buf[32];                                    //for positioning the cursor at the current position
-    snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , E.cy + 1 , E.cx + 1);
+    snprintf(buf , sizeof(buf) , "\x1b[%d;%dH" , (E.cy - E.rowoff) + 1 , E.cx + 1);
     abAppend(&ab , buf , strlen(buf));
 
 
@@ -390,6 +405,7 @@ void initEditor() {
     E.cx = 0;                         //horizontal is x
     E.cy = 0;                         //vertical is y
     E.numrows = 0;
+    E.rowoff = 0;
     E.row = NULL;
     if (getWindowSize(&E.screenrows , &E.screencols) == -1) die("get window size");
 }

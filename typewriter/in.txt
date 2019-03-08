@@ -1,2 +1,63 @@
-arpit singh
-srishti singh
+will unblock all of the blocked threads. The function
+int pthread cond wait(
+pthread cond t∗
+pthread mutex t∗
+cond var p
+mutex p
+/∗ in/out ∗/,
+/∗ in/out ∗/);
+will unlock the mutex referred to by mutex p and cause the executing thread
+to block until it is unblocked by another thread’s call to pthread cond signal
+or pthread cond broadcast . When the thread is unblocked, it reacquires the
+mutex. So in effect, pthread cond wait implements the following sequence of
+functions:
+pthread mutex unlock(&mutex p);
+wait on signal(&cond var p);
+pthread mutex lock(&mutex p);
+The following code implements a barrier with a condition variable:
+/∗ Shared ∗/
+int counter = 0;
+pthread mutex t mutex;
+pthread cond t cond var;
+will unblock all of the blocked threads. The function
+int pthread cond wait(
+pthread cond t∗
+pthread mutex t∗
+cond var p
+mutex p
+/∗ in/out ∗/,
+/∗ in/out ∗/);
+will unlock the mutex referred to by mutex p and cause the executing thread
+to block until it is unblocked by another thread’s call to pthread cond signal
+or pthread cond broadcast . When the thread is unblocked, it reacquires the
+mutex. So in effect, pthread cond wait implements the following sequence of
+functions:
+pthread mutex unlock(&mutex p);
+wait on signal(&cond var p);
+pthread mutex lock(&mutex p);
+The following code implements a barrier with a condition variable:
+/∗ Shared ∗/
+int counter = 0;
+pthread mutex t mutex;
+pthread cond t cond var;
+will unblock all of the blocked threads. The function
+int pthread cond wait(
+pthread cond t∗
+pthread mutex t∗
+cond var p
+mutex p
+/∗ in/out ∗/,
+/∗ in/out ∗/);
+will unlock the mutex referred to by mutex p and cause the executing thread
+to block until it is unblocked by another thread’s call to pthread cond signal
+or pthread cond broadcast . When the thread is unblocked, it reacquires the
+mutex. So in effect, pthread cond wait implements the following sequence of
+functions:
+pthread mutex unlock(&mutex p);
+wait on signal(&cond var p);
+pthread mutex lock(&mutex p);
+The following code implements a barrier with a condition variable:
+/∗ Shared ∗/
+int counter = 0;
+pthread mutex t mutex;
+pthread cond t cond var;
