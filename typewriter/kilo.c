@@ -1,3 +1,7 @@
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
 #include <unistd.h>
 #include <termios.h>               //for the terminal
 #include <stdlib.h>
@@ -70,7 +74,7 @@ struct editorConfig {
     int screenrows;
     int screencols;
     int numrows;
-    erow row;
+    erow* row;               //for storing multiple lines
     struct termios orig_termios;
 };
 
@@ -314,7 +318,9 @@ void editorDrawRows( struct abuf *ab){
     {
         //this is for printing the editor name on the terminal
         if (y >= E.numrows ){
-            if (y == E.screenrows / 3){
+
+            //display the welcome message only when the file is opened
+            if (E.numrows == 0 && y == E.screenrows / 3){
                 char welcome[80];
                 int welcomelen = snprintf(welcome , sizeof(welcome) , 
                 "Arpit Editor -- version %s" , Arpit_editor_version);
@@ -375,6 +381,7 @@ void initEditor() {
     E.cx = 0;                         //horizontal is x
     E.cy = 0;                         //vertical is y
     E.numrows = 0;
+    E.row = NULL;
     if (getWindowSize(&E.screenrows , &E.screencols) == -1) die("get window size");
 }
 
