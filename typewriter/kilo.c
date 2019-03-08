@@ -70,7 +70,7 @@ typedef struct erow {
 
 
 struct editorConfig {
-    int cx , cy;             //for the current position of the cursor; cx - horizontal ; cy - vertical
+    int cx , cy;             //for the current position of the cursor; cx - horizontal ; cy - vertical on the file
     int screenrows;
     int screencols;
     int numrows;
@@ -265,13 +265,25 @@ void editorOpen (char *filename){
 // for moving the cursor using the keys w,a,s,d
 void editorMoveCursor(int key)
 {
+    //if the cursor in the file is beyond the end of the file then assign null otherwise E.row[E.cy];
+    erow *row = (E.cy >= E.numrows ) ? NULL : &E.row[E.cy];
     switch(key){
         case ARROW_LEFT:
             if (E.cx != 0)
             E.cx--;
+            else if (E.cy > 0){         //if the cursor is at the beginning of the line move to the previous line
+                E.cy--;
+                E.cx = E.row[E.cy].size;
+            }
             break;
         case ARROW_RIGHT:
+            //allow to move the cursor if the row is not null and the cursor position is less than the size of the row
+            if (row && E.cx < row->size)
             E.cx++;
+            else if (row && E.cx == row->size){   //if at the end of the line move to the next line
+                E.cx = 0;
+                E.cy++;
+            }
             break;
         case ARROW_UP:
             if (E.cy != 0)
@@ -282,6 +294,12 @@ void editorMoveCursor(int key)
             E.cy++;
             break;
     }
+    //to move the cursor to the end of the line if it went past the end of the line
+    //need to take the row again since E.cy can be pointing to someone else
+    row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];            //if from file assign the row otherwise null
+    int rowlen = row ? row->size:0;                             //get len of the row
+    if (E.cx > rowlen)                                          //if cursor is beyond rowlen then move it in its limit
+        E.cx = rowlen;
 }
 
 //this function map the control sequences to the appropriate function
