@@ -163,10 +163,18 @@ void editorProcessKeypress () {
 // ****************************** output ********************************
 void editorDrawRows( struct abuf *ab){
     //printing the tildas upto last line - 1 and then printing simply the tilda at the last
-    for (int y = 0 ; y < E.screenrows -1 ; y++)
-        abAppend (ab , "~\r\n" , 3);
+    for (int y = 0 ; y < E.screenrows ; y++)
+    {
+        abAppend(ab , "~" , 1);
+
+        abAppend(ab , "\x1b[K" , 3);                    //print the tilda and then clear the line to the right of the cursor
+                                                       //by defualt it ersases to the right of the cursor
+        if (y < E.screenrows - 1){
+            abAppend(ab , "\r\n" , 2);
+        }
+    }
     
-    abAppend(ab , "~" , 1);
+    
 }
 
 
@@ -174,11 +182,13 @@ void editorRefreshScreen (){
     // doing using the struct abuf
     struct abuf ab = ABUF_INIT;
 
-    abAppend (&ab , "\x1b[1J" , 4);                  //clear the screen
+    abAppend(&ab , "\x1b[?25l" , 6);                 //for turning of the cursor
+    // abAppend (&ab , "\x1b[1J" , 4);                  //instead of clearing the whole screen clear line by line
     abAppend(&ab , "\x1b[H" , 3);                    //put the cursor at the top of the screen
     
     editorDrawRows(&ab);
     abAppend(&ab , "\x1b[H" , 3);              //for repositioning of the cursor
+    abAppend(&ab , "\x1b[?25h" , 6);                //for turning on the cursor
 
     //writing to the terminal in one go
     write(STDOUT_FILENO , ab.b , ab.len);
