@@ -1,10 +1,12 @@
 : pthread_overhead histogram barrier pi_problem link_list
+23.232 int 32 int23
 
+int32
 pthread_overhead : pthread_overhead.c pthread_overhead.cpp
 	gcc -pthread -o pthread_overhead pthread_overhead.c
 	g++ -std=c++11 -pthread -o pthread_overheadc+ pthread_overhead.cpp
 histogram
-		 histogram_mutex.c 
+int32 32 what23 are you doing +23		 histogram_mutex.c 
 	gcc -pthread -o histogram histogram_mutex.c
 
 barrier : barrier.c

@@ -37,7 +37,8 @@ enum editorKey {
 
 enum editorHighlight {
     HL_NORMAL = 0,
-    HL_NUMBER
+    HL_NUMBER,
+    HL_MATCH
 };
 // ********************************** append buffer ***************************
 
@@ -249,21 +250,43 @@ int getWindowSize (int *rows , int *cols)   {
     }    
 }
 // ********************************* syntax highlighting ******************
+//takes a character and tells wether it is a separator or not
+int is_separator (int c ){
+    return isspace(c) || c == '\0' || strchr(",.()+-/*=~%<>[];",c) != NULL;
+}
+
+
 void editorUpdateSyntax (erow *row){
     row->hl = realloc(row->hl , row->rsize);
     memset(row->hl , HL_NORMAL , row->rsize);            //setting all the values to normal
 
-    for (int i =0; i < row->rsize ; i++)
-    {
-        if (isdigit(row->render[i])){
+    int prev_sep = 1;
+    int i = 0;
+    while (i < row->rsize){
+        char c = row->render[i];
+        //if i > 0 then get the hl of the previous character otherwise set it to HL_NORMAL
+        unsigned char prev_hl = (i > 0) ? row->hl[i -1 ] : HL_NORMAL;
+
+        //see if it is the digit and (prev character is a separator or prev_hl is number)
+        //if the first character of the number then the prev element must be a separator
+        //otherwise prev_hl = HL_NUMBER
+        //in that case set the hl = HL_NUMBER and prev_sep = 0;
+        if ((isdigit(c)  && ( prev_sep || prev_hl == HL_NUMBER)) || 
+            (c == '.' && prev_hl == HL_NUMBER)){          //for the decimal point
             row->hl[i] = HL_NUMBER;
+            i++;
+            prev_sep = 0;
+            continue;
         }
+        prev_sep = is_separator(c);
+        i++;
     }
 }
 
 int editorSyntaxToColor (int hl){
     switch(hl){
         case HL_NUMBER: return 31;
+        case HL_MATCH : return 34;
         default:    return 37;
     }
 }
@@ -532,6 +555,17 @@ void editorFindCallback (char *query , int key) {
     static int last_match = -1;             //index of the row the last match is on; -1 if there was no last match
     static int direction = 1;
 
+    static int saved_hl_line;
+    static char *saved_hl = NULL;
+
+    //restoring back the saved hl
+    if (saved_hl){
+        memcpy(E.row[saved_hl_line].hl , saved_hl , E.row[saved_hl_line].rsize);
+        free(saved_hl);
+        saved_hl = NULL;
+    }
+
+
     //by default search in the forward direction
     if (key == '\r' || key == '\x1b'){         //leave the search mode
         last_match = -1;
@@ -569,6 +603,13 @@ void editorFindCallback (char *query , int key) {
             E.cy = current;
             E.cx = editorRowRxToCx(row , match - row->render);
             E.rowoff = E.numrows;           //in the next refresh screen the cursor is at the top
+            
+            //if found then save the hl line
+            saved_hl_line = current;
+            saved_hl = malloc(row->rsize);
+            memcpy(saved_hl , row->hl , row->rsize);
+
+            memset(&row->hl[match - row->render] , HL_MATCH , strlen(query));
             break;
         }
     }
