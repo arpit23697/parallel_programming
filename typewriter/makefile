@@ -18,7 +18,7 @@ gcc -pthread -o pi_program pi_program.c
 link_list : link_list_mutexOne.c link_list_mutexPerNode.c link_list_rwLock.c input_link_list.c
 	gcc -pthread -o link_list_mutexOne link_list_mutexOne.c
 	gcc -pthread -o link_list_mutexPerNode link_list_mutexPerNode.c
-	gcc -pthread -o link_list_rwlock link_list_rwLock.c
+	gcc -pthreafdjafdlkjadfad -o link_list_rwlock link_list_rwLock.c
 	gcc -o input input_link_list.c
 
 clean: 
