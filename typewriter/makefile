@@ -7,12 +7,12 @@ fadfda
 histogram : histogram_mutex.c 
 	gcc -pthread -o histogram histogram_mutex.c
 
-barrier : barrier.c         hi there
+barrier : barrier.c
 	gcc -pthread -o barrier barrier.c
-fdafdaarpit sinhggfdafd
+
 pi_problem : pi_program.c 
-so what is happening	gcc -pthread -o pi_program pi_program.c
-maja a rha h
+gcc -pthread -o pi_program pi_program.c
+
 link_list : link_list_mutexOne.c link_list_mutexPerNode.c link_list_rwLock.c input_link_list.c
 	gcc -pthread -o link_list_mutexOne link_list_mutexOne.c
 	gcc -pthread -o link_list_mutexPerNode link_list_mutexPerNode.c

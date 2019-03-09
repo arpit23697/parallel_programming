@@ -297,6 +297,21 @@ void editorAppendRow (char *s, size_t len)
     E.dirty++;                //can get the sense of how dirty the file is
 }
 
+void editorFreeRow(erow *row){
+    free(row->render);
+    free(row->chars);
+}
+
+//for deleting the row
+//at is the current row number  
+void editorDelRow (int at){
+    if (at < 0 || at >= E.numrows) return;
+    editorFreeRow(&E.row[at]);                      //at is referring to the current row
+    memmove(&E.row[at] , &E.row[at + 1] , sizeof(erow) * (E.numrows - at - 1) );        //this represents joining of the current row with the rest of the file
+    E.numrows--;
+    E.dirty++;
+}
+
 void editorRowInsertChar (erow *row , int at , int c){
     //at is allowed to go past the end of the string in which case the character should be inserted at the end of the string
     if (at < 0 || at > row->size) at = row->size;
@@ -306,6 +321,24 @@ void editorRowInsertChar (erow *row , int at , int c){
     memmove(&row->chars[at+1] , &row->chars[at] , row->size - at + 1);   //shifting the line by one character
     row->size++;
     row->chars[at] = c;
+    editorUpdateRow(row);                 //include tabs and everything
+    E.dirty++;
+}
+
+//append the string at the end of the row
+void editorRowAppendString (erow *row , char *s , size_t len){
+    row->chars = realloc(row->chars , row->size + len + 1);
+    memcpy (&row->chars[row->size] , s, len);
+    row->size += len;
+    row->chars[row->size] = '\0';
+    editorUpdateRow(row);
+    E.dirty++;
+}
+
+void editorRowDelChar(erow *row , int at){
+    if (at < 0 || at >= row->size) return;        //can't go past the line
+    memmove (&row->chars[at] , &row->chars[at + 1] , row->size - at);
+    row->size--;
     editorUpdateRow(row);
     E.dirty++;
 }
@@ -318,6 +351,26 @@ void editorInsertChar (int c){
     //insert at the cursor position
     editorRowInsertChar(&E.row[E.cy] , E.cx , c);
     E.cx++;              //next character inserted at the next position
+}
+
+void editorDelChar (){
+    if (E.cy == E.numrows) return;     //if at the last line after the file then return 
+    if (E.cx == 0 && E.cy == 0 )return;          //at the beginning of the file
+    
+    
+    erow *row = &E.row[E.cy];
+    if (E.cx > 0){
+        editorRowDelChar(row , E.cx - 1);
+        E.cx--;
+    }
+    else
+    {
+        E.cx = E.row[E.cy - 1].size;
+        editorRowAppendString(&E.row[E.cy - 1] , row->chars , row->size);
+        editorDelRow(E.cy);
+        E.cy--;
+    }
+    
 }
 
 // *******************************io file **************************
@@ -474,6 +527,8 @@ void editorProcessKeypress () {
         case BACKSPACE:
         case CTRL_KEY('h'):
         case DEL_KEY:
+            if (c == DEL_KEY) editorMoveCursor(ARROW_RIGHT);
+            editorDelChar();
             break;
         
         case PAGE_UP:
