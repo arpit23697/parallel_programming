@@ -9,7 +9,7 @@ histogram : histogram_mutex.c
 
 barrier : barrier.c         hi there
 	gcc -pthread -o barrier barrier.c
-
+arpit sinhggfdafd
 pi_problem : pi_program.c 
 so what is happening	gcc -pthread -o pi_program pi_program.c
 maja a rha h

@@ -85,7 +85,8 @@ struct editorConfig {
     int coloff;              //columnoffset for the horizontal scrolling
     erow* row;               //for storing multiple lines
     char *filename;          //for the file opened
-    char statusmsg[80];       //for the status msg 
+    char statusmsg[80];       //for the status msg
+    int dirty;               //to check if the text on the file and the editor are different are not 
     time_t statusmsg_time;
     struct termios orig_termios;
 };
@@ -292,6 +293,7 @@ void editorAppendRow (char *s, size_t len)
     E.row[at].render = NULL;
     editorUpdateRow(&E.row[at]);
     E.numrows++;
+    E.dirty++;                //can get the sense of how dirty the file is
 }
 
 void editorRowInsertChar (erow *row , int at , int c){
@@ -304,6 +306,7 @@ void editorRowInsertChar (erow *row , int at , int c){
     row->size++;
     row->chars[at] = c;
     editorUpdateRow(row);
+    E.dirty++;
 }
 
 // **************************** editor operations *********************
@@ -359,6 +362,7 @@ void editorOpen (char *filename){
     }
     free(line);
     fclose(fp);
+    E.dirty = 0;
 }
 
 void editorSave() {
@@ -379,6 +383,7 @@ void editorSave() {
             if (write(fd , buf , len) == len){
                 close(fd);
                 free(buf);
+                E.dirty = 0;
                 editorSetStatusMessage("%d bytes written to disk" , len);
                 return;
             }
@@ -569,8 +574,9 @@ void editorDrawStatusBar (struct abuf *ab)
 {
     abAppend(ab , "\x1b[7m" , 4);             //inverted colors
     char status[80] , rstatus[80];
-    int len = snprintf(status , sizeof(status), "%.20s - %d lines" , 
-        E.filename ? E.filename : "[No name]" , E.numrows);      //filename and number of lines in the file
+    int len = snprintf(status , sizeof(status), "%.20s - %d lines %s" , 
+        E.filename ? E.filename : "[No name]" , E.numrows, 
+        E.dirty ? "(modified)" : "");      //filename and number of lines in the file ; wether it is modified or not
 
     int rlen = snprintf(rstatus , sizeof(rstatus) , "%d/%d" , 
         E.cy + 1 , E.numrows);                       //current line number in the file
@@ -646,6 +652,7 @@ void initEditor() {
     E.filename = NULL;
     E.statusmsg[0] = '\0';                           //initialised to empty string
     E.statusmsg_time = 0;
+    E.dirty = 0;
     if (getWindowSize(&E.screenrows , &E.screencols) == -1) die("get window size");
     E.screenrows -=2;                     //for the status ; decreases the display area ; making the last row as the status bar
 }
