@@ -97,7 +97,7 @@ struct editorConfig E;
 // ************************* prototype *************************************
 void editorSetStatusMessage (const char * fmt , ...);
 void editorRefreshScreen();
-char *editorPrompt (char * prompt);
+char *editorPrompt (char * prompt , void (*callback)(char *, int));
 
 // Most C library functions that fail will set the global
 //  errno variable to indicate what the error was. 
@@ -457,7 +457,7 @@ void editorOpen (char *filename){
 
 void editorSave() {
     if (E.filename == NULL){
-        E.filename = editorPrompt("Save as : %s");
+        E.filename = editorPrompt("Save as : %s" , NULL);
         if (E.filename == NULL){
             editorSetStatusMessage("Save Aborted");
             return;
@@ -492,9 +492,15 @@ void editorSave() {
 
 // *************************** find ************************
 
-void editorFind() {
-    char *query = editorPrompt("Search : %s (ESC to cancel)");
-    if (query == NULL) return;
+
+//find in each call
+//going to end when pressed enter or escape character
+void editorFindCallback (char *query , int key) {
+    if (key == '\r' || key == '\x1b')
+        return;
+
+    // char *query = editorPrompt("Search : %s (ESC to cancel)" , NULL);
+    // if (query == NULL) return;
 
     for (int i= 0 ; i < E.numrows ; i++){
         erow *row = &E.row[i];
@@ -507,11 +513,23 @@ void editorFind() {
             break;
         }
     }
-    free(query);
+    // free(query);
+}
+
+void editorFind(){
+    //after prompting it will call the editorFindCallback function every time
+    char *query = editorPrompt("Search : %s (ESC to cancel)" , editorFindCallback);
+
+    if (query){
+        free(query);
+    }
 }
 // *****************************input *****************************
-//prompt will be displayed on the status 
-char *editorPrompt (char *prompt){
+//prompt will be displayed on the status
+
+//if statement allow the user to pass the callback as null
+//this is going to be the case when the user prompts for saving the file
+char *editorPrompt (char *prompt , void (*callback)(char * , int) ){
     size_t buffsize = 128;
     char *buf = malloc(buffsize);
 
@@ -533,12 +551,14 @@ char *editorPrompt (char *prompt){
         }
         else if (c == '\x1b'){
             editorSetStatusMessage("");
+            if (callback) callback(buf , c);
             free(buf);
             return NULL;
         }
         else if (c == '\r'){
             if (buflen != 0){
                 editorSetStatusMessage("");
+                if (callback) callback(buf , c);
                 return buf;
             }
 
@@ -552,6 +572,7 @@ char *editorPrompt (char *prompt){
             buf[buflen++]= c;
             buf[buflen] = '\0';
         }
+        if (callback) callback(buf ,c);
     }
 }
 
