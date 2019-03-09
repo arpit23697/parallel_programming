@@ -34,6 +34,11 @@ enum editorKey {
     PAGE_DOWN
 
 };
+
+enum editorHighlight {
+    HL_NORMAL = 0,
+    HL_NUMBER
+}
 // ********************************** append buffer ***************************
 
 //this struct is for creating the dynamic string with only one operation append
@@ -72,6 +77,9 @@ typedef struct erow {
     int rsize;
     char *chars;
     char *render;
+    unsigned char *hl;           //each value in the array will correspond to a character in render 
+                                //and tells you wether that character is part of a string , or a comment, 
+                                //or a number and so on
 }erow;
 
 
@@ -312,6 +320,7 @@ void editorInsertRow (int at , char *s, size_t len)
 
     E.row[at].rsize= 0;
     E.row[at].render = NULL;
+    E.row[at].hl = NULL;
     editorUpdateRow(&E.row[at]);
     E.numrows++;
     E.dirty++;                //can get the sense of how dirty the file is
@@ -320,6 +329,7 @@ void editorInsertRow (int at , char *s, size_t len)
 void editorFreeRow(erow *row){
     free(row->render);
     free(row->chars);
+    free(row->hl);
 }
 
 //for deleting the row
@@ -795,7 +805,21 @@ void editorDrawRows( struct abuf *ab){
             int len = E.row[filerow].rsize - E.coloff;
             if (len < 0) len = 0;
             if (len > E.screencols) len = E.screencols;
-            abAppend(ab,  &E.row[filerow].render[E.coloff] , len);
+
+            //for coloring 
+            char *c = &E.row[filerow].render[E.coloff];
+            for (int j = 0; j < len ; j++){
+                if (isdigit(c[j])){
+                    abAppend(ab , "\x1b[31m" , 5);
+                    abAppend(ab , &c[j] , 1);
+                    abAppend(ab , "\x1b[39m" , 5);
+                }else{
+                    abAppend(ab , &c[j] , 1);
+                }
+            }
+
+
+            // abAppend(ab,  &E.row[filerow].render[E.coloff] , len);
         }
         abAppend(ab , "\x1b[K" , 3);                    //print the tilda and then clear the line to the right of the cursor
                                                        //by defualt it ersases to the right of the cursor
