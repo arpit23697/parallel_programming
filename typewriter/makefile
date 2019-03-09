@@ -1,4 +1,4 @@
-						: pthread_overhead histogram barrier pi_problem link_list
+: pthread_overhead histogram barrier pi_problem link_list
 
 pthread_overhead : pthread_overhead.c pthread_overhead.cpp
 	gcc -pthread -o pthread_overhead pthread_overhead.c
@@ -20,17 +20,16 @@ link_list : link_list_mutexOne.c link_list_mutexPerNode.c link_list_rwLock.c inp
 	gcc -o input input_link_list.c
 
 clean: 
-		m -f pthread_overhead plt.txt a.out pthread_overheadc+ histogram barrier pi_program in.txt link_list_mutexOne link_list_mutexPerNode link_list_rwlock input
+	rm -f pthread_overhead plt.txt a.out pthread_overheadc+ histogram barrier pi_program in.txt link_list_mutexOne link_list_mutexPerNode link_list_rwlock input
 	
-		cho cleaned
+	echo cleaned
 
 	est_overhead : pthread_overhead
 	echo testing overhead
 	${CURDIR}/pthread_overhead 
 	${CURDIR}/pthread_overheadc+
 	python plot.py
-	echo overhead tested
-
+	echo overhead teste
 test_histogram : histogram
 	echo testing histogram
 	${CURDIR}/histogram 1000 10

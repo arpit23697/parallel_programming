@@ -254,12 +254,12 @@ int editorRowCxToRx (erow *row , int cx){
     return rx;
 }
 
-//this function will go through the row; updating the cur_rx; point where it crossed the rx ; it will return the cx
+// this function will go through the row; updating the cur_rx; point where it crossed the rx ; it will return the cx
 int editorRowRxToCx (erow *row , int rx){
     int cur_rx = 0;
     int cx;
     for (cx = 0; cx < row->size ; cx++){
-        if (row->chars[cx] = '\t'){
+        if (row->chars[cx] == '\t'){
             cur_rx += (TAB_STOP - 1) - (cur_rx % TAB_STOP);
         }
         cur_rx++;
@@ -496,18 +496,44 @@ void editorSave() {
 //find in each call
 //going to end when pressed enter or escape character
 void editorFindCallback (char *query , int key) {
-    if (key == '\r' || key == '\x1b')
+    static int last_match = -1;             //index of the row the last match is on; -1 if there was no last match
+    static int direction = 1;
+
+    //by default search in the forward direction
+    if (key == '\r' || key == '\x1b'){         //leave the search mode
+        last_match = -1;
+        direction = 1;
         return;
+    }else if (key == ARROW_RIGHT || key == ARROW_DOWN){
+        direction = 1;
+    }else if (key == ARROW_LEFT || key == ARROW_UP){
+        direction = -1;
+    }else {
+        last_match = -1;
+        direction = 1;
+    }
+        
 
     // char *query = editorPrompt("Search : %s (ESC to cancel)" , NULL);
     // if (query == NULL) return;
+    if (last_match == -1 ) direction = 1;
+    int current = last_match;
+
 
     for (int i= 0 ; i < E.numrows ; i++){
-        erow *row = &E.row[i];
+        //if the last match is zero then start at the top of the file
+        current += direction;           //depending on the direction change the value of the current
+                                        //if positive increment in the positive direction
+                                        //else negative
+        if (current == -1) current = E.numrows - 1;
+        else if (current == E.numrows) current = 0;
+
+        erow *row = &E.row[current];
         char *match = strstr(row->render , query);           //returns a pointer to the matching substring
 
         if (match){
-            E.cy = i;
+            last_match = current;
+            E.cy = current;
             E.cx = editorRowRxToCx(row , match - row->render);
             E.rowoff = E.numrows;           //in the next refresh screen the cursor is at the top
             break;
@@ -518,10 +544,21 @@ void editorFindCallback (char *query , int key) {
 
 void editorFind(){
     //after prompting it will call the editorFindCallback function every time
-    char *query = editorPrompt("Search : %s (ESC to cancel)" , editorFindCallback);
+    int saved_cx = E.cx;
+    int saved_cy = E.cy;
+    int saved_coloff = E.coloff;
+    int saved_rowoff = E.rowoff;
+
+
+    char *query = editorPrompt("Search : %s (use ESC/Arrows/Enter)" , editorFindCallback);
 
     if (query){
         free(query);
+    }else {             //if query is null that means they pressed escape so return
+        E.cx = saved_cx;
+        E.cy = saved_cy;
+        E.coloff = saved_coloff;
+        E.rowoff = saved_rowoff;
     }
 }
 // *****************************input *****************************
