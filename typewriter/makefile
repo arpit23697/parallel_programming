@@ -3,13 +3,13 @@ codes : pthread_overhead histogram barrier pi_problem link_list
 pthread_overhead : pthread_overhead.c pthread_overhead.cpp
 	gcc -pthread -o pthread_overhead pthread_overhead.c
 	g++ -std=c++11 -pthread -o pthread_overheadc+ pthread_overhead.cpp
-
+fadfda
 histogram : histogram_mutex.c 
 	gcc -pthread -o histogram histogram_mutex.c
 
 barrier : barrier.c         hi there
 	gcc -pthread -o barrier barrier.c
-arpit sinhggfdafd
+fdafdaarpit sinhggfdafd
 pi_problem : pi_program.c 
 so what is happening	gcc -pthread -o pi_program pi_program.c
 maja a rha h
