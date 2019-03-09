@@ -7,7 +7,7 @@ pthread_overhead : pthread_overhead.c pthread_overhead.cpp
 histogram : histogram_mutex.c 
 	gcc -pthread -o histogram histogram_mutex.c
 
-barrier : barrier.c
+barrier : barrier.c         hi there
 	gcc -pthread -o barrier barrier.c
 
 pi_problem : pi_program.c 

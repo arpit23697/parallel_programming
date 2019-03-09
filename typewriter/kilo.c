@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <termios.h>               //for the terminal
 #include <stdlib.h>
+#include <fcntl.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <errno.h>
@@ -20,6 +21,7 @@
 
 
 enum editorKey {
+    BACKSPACE = 127,
     ARROW_LEFT = 1000,
     ARROW_RIGHT,
     ARROW_UP,
@@ -312,6 +314,27 @@ void editorInsertChar (int c){
 }
 
 // *******************************io file **************************
+//gives the string written on the editor 
+char *editorRowsToString (int *buflen){
+
+    //goes through each row and append it to the buffer adding a new line character after every line
+    int totlen = 0;
+    for (int j =0 ; j < E.numrows ; j++)
+         totlen += E.row[j].size + 1;
+    *buflen = totlen;
+
+    char *buf = malloc(totlen);
+    char *p = buf;
+    for (int j = 0; j < E.numrows ; j++){
+        memcpy (p , E.row[j].chars , E.row[j].size);
+        p += E.row[j].size;
+        *p = '\n';
+        p++;
+    }
+    return buf;
+}
+
+
 
 void editorOpen (char *filename){
     free(E.filename);
@@ -333,6 +356,25 @@ void editorOpen (char *filename){
     }
     free(line);
     fclose(fp);
+}
+
+void editorSave() {
+    if (E.filename == NULL) return;
+
+    int len;
+    //will return the string on the editor and give the length as well
+    char *buf = editorRowsToString(&len);
+
+    //write into the file after opening and free the buffer
+    //O_CREAT      if the file already does not exist create it
+    //O_RDWR       open for reading and writing
+    //0644         gives the permission if the new file is created
+    int fd = open(E.filename , O_RDWR | O_CREAT , 0644);
+    ftruncate(fd , len);               //sets the filesize to the specified length ; using ftrucate make it safer so that you not lose much data
+    write(fd , buf , len);
+    close(fd);
+    free(buf);
+
 }
 
 // *****************************input *****************************
@@ -381,10 +423,17 @@ void editorProcessKeypress () {
     int c = editorReadKey();
     // printf("%c" , c);
     switch (c){
+        case '\r':
+            break;
+
         case CTRL_KEY('q'):
             write(STDERR_FILENO , "\x1b[2J" , 4);              //for clearing the screen
             write(STDERR_FILENO , "\x1b[H" , 3);               //for placing the cursor at the top of the screen
             exit(0);
+            break;
+
+        case CTRL_KEY('s'):
+            editorSave();
             break;
 
         case HOME_KEY:
@@ -395,6 +444,12 @@ void editorProcessKeypress () {
             if (E.cy < E.numrows)
                 E.cx = E.row[E.cy].size;
             break;
+
+        case BACKSPACE:
+        case CTRL_KEY('h'):
+        case DEL_KEY:
+            break;
+        
         case PAGE_UP:
         case PAGE_DOWN:
         {
@@ -419,6 +474,11 @@ void editorProcessKeypress () {
         case ARROW_RIGHT:
             editorMoveCursor(c);
             break;
+        case CTRL_KEY('l'):
+        case '\x1b':
+            break;
+
+
         default:
             editorInsertChar(c);
             break;
