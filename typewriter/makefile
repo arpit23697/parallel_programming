@@ -8,7 +8,7 @@ histogram
 	gcc -pthread -o histogram histogram_mutex.c
 
 barrier : barrier.c
-	gcc -pthread -o barrier barrier.c
+fda	gcc -pthread -o barrier barrier.c
 
 pi_problem : pi_program.c 
 gcc -pthread -o pi_program pi_program.c

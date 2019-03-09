@@ -96,7 +96,8 @@ struct editorConfig E;
 
 // ************************* prototype *************************************
 void editorSetStatusMessage (const char * fmt , ...);
-
+void editorRefreshScreen();
+char *editorPrompt (char * prompt);
 
 // Most C library functions that fail will set the global
 //  errno variable to indicate what the error was. 
@@ -438,7 +439,13 @@ void editorOpen (char *filename){
 }
 
 void editorSave() {
-    if (E.filename == NULL) return;
+    if (E.filename == NULL){
+        E.filename = editorPrompt("Save as : %s");
+        if (E.filename == NULL){
+            editorSetStatusMessage("Save Aborted");
+            return;
+        }
+    }
 
     int len;
     //will return the string on the editor and give the length as well
@@ -467,6 +474,53 @@ void editorSave() {
 }
 
 // *****************************input *****************************
+//prompt will be displayed on the status 
+char *editorPrompt (char *prompt){
+    size_t buffsize = 128;
+    char *buf = malloc(buffsize);
+
+    size_t buflen = 0;
+    buf[0] = '\0';
+
+    while (1){
+        //set the status message
+        editorSetStatusMessage(prompt , buf);
+        editorRefreshScreen();
+
+        int c = editorReadKey();
+
+        //this part check if the character is ENTER ; if then return buf after clearing the status bar 
+        //if not ; check if it is not a control character; if not then add it to the buffer after checking the length of the buffer
+        //if the user presses enter ; clear the status bar and send the buffer
+        if (c == DEL_KEY || c == CTRL_KEY('h') || c == BACKSPACE){
+            if (buflen!= 0)buf[--buflen] = '\0';
+        }
+        else if (c == '\x1b'){
+            editorSetStatusMessage("");
+            free(buf);
+            return NULL;
+        }
+        else if (c == '\r'){
+            if (buflen != 0){
+                editorSetStatusMessage("");
+                return buf;
+            }
+
+        } //if not a control character
+        else if (!iscntrl(c) && c < 128){
+            //if buffer is not sufficient then increase the size of the buffer
+            if (buflen == buffsize - 1){
+                buffsize *= 2;
+                buf = realloc(buf , buffsize);
+            }
+            buf[buflen++]= c;
+            buf[buflen] = '\0';
+        }
+    }
+}
+
+
+
 // for moving the cursor using the keys w,a,s,d
 void editorMoveCursor(int key)
 {
