@@ -11,8 +11,8 @@ barrier : barrier.c         hi there
 	gcc -pthread -o barrier barrier.c
 
 pi_problem : pi_program.c 
-	gcc -pthread -o pi_program pi_program.c
-
+so what is happening	gcc -pthread -o pi_program pi_program.c
+maja a rha h
 link_list : link_list_mutexOne.c link_list_mutexPerNode.c link_list_rwLock.c input_link_list.c
 	gcc -pthread -o link_list_mutexOne link_list_mutexOne.c
 	gcc -pthread -o link_list_mutexPerNode link_list_mutexPerNode.c
