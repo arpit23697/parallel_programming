@@ -38,7 +38,7 @@ enum editorKey {
 enum editorHighlight {
     HL_NORMAL = 0,
     HL_NUMBER
-}
+};
 // ********************************** append buffer ***************************
 
 //this struct is for creating the dynamic string with only one operation append
@@ -248,6 +248,26 @@ int getWindowSize (int *rows , int *cols)   {
         return 0;
     }    
 }
+// ********************************* syntax highlighting ******************
+void editorUpdateSyntax (erow *row){
+    row->hl = realloc(row->hl , row->rsize);
+    memset(row->hl , HL_NORMAL , row->rsize);            //setting all the values to normal
+
+    for (int i =0; i < row->rsize ; i++)
+    {
+        if (isdigit(row->render[i])){
+            row->hl[i] = HL_NUMBER;
+        }
+    }
+}
+
+int editorSyntaxToColor (int hl){
+    switch(hl){
+        case HL_NUMBER: return 31;
+        default:    return 37;
+    }
+}
+
 // ******************************* row operations ******************
 //function to convert cx to rx
 //cx is the position in the actual file and rx is the position in the line rendered on the editor
@@ -303,6 +323,9 @@ void editorUpdateRow(erow *row){
 
     row->render[idx] = '\0';
     row->rsize =idx;                //setting the size of the render
+
+    //after updating render, we will update the render row
+    editorUpdateSyntax(row);
 }
 
 //this function will copy the line from the file into the text editor and append the line onto the editor
@@ -808,17 +831,30 @@ void editorDrawRows( struct abuf *ab){
 
             //for coloring 
             char *c = &E.row[filerow].render[E.coloff];
+            unsigned char *hl = &E.row[filerow].hl[E.coloff];
+            int current_color = -1;
             for (int j = 0; j < len ; j++){
-                if (isdigit(c[j])){
-                    abAppend(ab , "\x1b[31m" , 5);
-                    abAppend(ab , &c[j] , 1);
-                    abAppend(ab , "\x1b[39m" , 5);
-                }else{
-                    abAppend(ab , &c[j] , 1);
+                if (hl[j] == HL_NORMAL){
+                    if (current_color != -1){
+                    abAppend(ab, "\x1b[39m" , 5);
+                    current_color = -1;
+                    }
+                    abAppend(ab, &c[j], 1);
+                }
+                else
+                {
+                    int color = editorSyntaxToColor(hl[j]);
+                    if (color != current_color){
+                        current_color = color;
+                        char buf[16];
+                        int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", color);
+                        abAppend(ab, buf, clen);
+                    }
+                    
+                    abAppend(ab, &c[j], 1);
                 }
             }
-
-
+            abAppend(ab , "\x1b[39m" , 5);
             // abAppend(ab,  &E.row[filerow].render[E.coloff] , len);
         }
         abAppend(ab , "\x1b[K" , 3);                    //print the tilda and then clear the line to the right of the cursor
