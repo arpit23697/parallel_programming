@@ -244,8 +244,6 @@ int editorRowCxToRx (erow *row , int cx){
     return rx;
 }
 
-
-
 void editorUpdateRow(erow *row){
 
     //count number of tabs
@@ -274,15 +272,6 @@ void editorUpdateRow(erow *row){
     row->rsize =idx;                //setting the size of the render
 }
 
-
-
-
-
-
-
-
-
-
 void editorAppendRow (char *s, size_t len)
 {
     //copy the line in the editor row
@@ -300,7 +289,27 @@ void editorAppendRow (char *s, size_t len)
     E.numrows++;
 }
 
+void editorRowInsertChar (erow *row , int at , int c){
+    //at is allowed to go past the end of the string in which case the character should be inserted at the end of the string
+    if (at < 0 || at > row->size) at = row->size;
+    row->chars = realloc(row->chars , row->size + 2);           //+2 is because we have to make room for the null byte
 
+    //safe to use when source and destination overlap
+    memmove(&row->chars[at+1] , &row->chars[at] , row->size - at + 1);   //shifting the line by one character
+    row->size++;
+    row->chars[at] = c;
+    editorUpdateRow(row);
+}
+
+// **************************** editor operations *********************
+void editorInsertChar (int c){
+    if (E.cy == E.numrows){               //cursor is on the tilda line
+        editorAppendRow("", 0);
+    }
+    //insert at the cursor position
+    editorRowInsertChar(&E.row[E.cy] , E.cx , c);
+    E.cx++;              //next character inserted at the next position
+}
 
 // *******************************io file **************************
 
@@ -409,6 +418,9 @@ void editorProcessKeypress () {
         case ARROW_LEFT:
         case ARROW_RIGHT:
             editorMoveCursor(c);
+            break;
+        default:
+            editorInsertChar(c);
             break;
     }
 }
