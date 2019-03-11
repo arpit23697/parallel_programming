@@ -1028,7 +1028,20 @@ void editorDrawRows( struct abuf *ab){
             unsigned char *hl = &E.row[filerow].hl[E.coloff];
             int current_color = -1;
             for (int j = 0; j < len ; j++){
-                if (hl[j] == HL_NORMAL){
+                //for the non printable character
+                if (iscntrl(c[j])) {
+                    char sym = (c[j] <= 26) ? '@' + c[j] : '?';
+                    abAppend(ab , "\x1b[7m" , 4);
+                    abAppend(ab , &sym , 1);
+                    abAppend(ab , "\x1b[m" , 3);
+                    // to set the current color
+                    if (current_color != -1) {
+                        char buf[16];
+                        int clen = snprintf(buf, sizeof(buf) , "\x1b[%dm" , current_color);
+                        abAppend (ab , buf , clen);
+                    }
+                }                
+                else if (hl[j] == HL_NORMAL){
                     if (current_color != -1){
                     abAppend(ab, "\x1b[39m" , 5);
                     current_color = -1;
