@@ -37,6 +37,7 @@ enum editorKey {
 
 enum editorHighlight {
     HL_NORMAL = 0,
+    HL_STRING,
     HL_NUMBER,
     HL_MATCH
 };
@@ -70,7 +71,7 @@ void abFree(struct abuf *ab)
 }
 
 #define HL_HIGHLIGHT_NUMBERS (1 << 0)
-
+#define HL_HIGHLIGHT_STRINGS (1 << 1)
 // ********************************* data **********************************
 struct editorSyntax {
     char *filetype;                    //name of the filetype
@@ -119,7 +120,7 @@ struct editorSyntax HLDB[] = {
     {
         "c",
         C_HL_extension,
-        HL_HIGHLIGHT_NUMBERS
+        HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
     },
 };
 
@@ -285,12 +286,40 @@ void editorUpdateSyntax (erow *row){
 
     if (E.syntax == NULL) return;
     int prev_sep = 1;
+    int in_string = 0;
+
     int i = 0;
     while (i < row->rsize){
         char c = row->render[i];
         //if i > 0 then get the hl of the previous character otherwise set it to HL_NORMAL
         unsigned char prev_hl = (i > 0) ? row->hl[i -1 ] : HL_NORMAL;
-        if (E.syntax->flag & HL_HIGHLIGHT_NUMBERS ) {
+
+        //this is for the string
+        if (E.syntax->flag & HL_HIGHLIGHT_STRINGS){       //if the flag is on
+            if (in_string){                               //if in_string is not zero then then highlight
+                row->hl[i] = HL_STRING;
+                //for the escaped quotes
+                if (c == '\\' && i + 1 < row->rsize){
+                    row->hl[i+1] = HL_STRING;             //escaped characters are part of the string in that case advance i by two steps
+                    i+=2;
+                    continue;
+                }
+                if (c == in_string) in_string = 0;        //if c == in_string ; that means end of string
+                i++;                                        
+                prev_sep = 1;                             //set that it is a separator
+                continue;
+            }else {
+                if (c == '"' || c == '\''){     //for both the double quoted and single quoted string
+                    in_string = c;            //if the character is " or \' then in that case set it's value to be equal to in_string
+                    row->hl[i] = HL_STRING;
+                    i++;
+                    continue;
+                }
+            }
+        }
+
+
+        if (E.syntax->flag & HL_HIGHLIGHT_NUMBERS ) {       //if the highlight number bit is on
         //see if it is the digit and (prev character is a separator or prev_hl is number)
         //if the first character of the number then the prev element must be a separator
         //otherwise prev_hl = HL_NUMBER
@@ -311,6 +340,7 @@ void editorUpdateSyntax (erow *row){
 
 int editorSyntaxToColor (int hl){
     switch(hl){
+        case HL_STRING : return 35;
         case HL_NUMBER: return 31;
         case HL_MATCH : return 34;
         default:    return 37;
