@@ -16,7 +16,6 @@
 #include <stdarg.h>
 #include <pthread.h>
 #include <semaphore.h>
-#include <sys/time.h>
 // *********************************** defines ********************
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define TAB_STOP 8
@@ -91,6 +90,8 @@ struct editorSyntax {
 };
 
 struct termios orig_termios;
+pthread_mutex_t editor_config_mutex;
+
 
 // For storing the row in a editor
 typedef struct erow {
@@ -103,6 +104,8 @@ typedef struct erow {
                                 //and tells you wether that character is part of a string , or a comment, 
                                 //or a number and so on
     int hl_open_comment;        //wether this line is a comment or not
+    pthread_mutex_t mutex;      //this is the mutex for each of the rows
+
 }erow;
 
 
@@ -124,6 +127,7 @@ struct editorConfig {
     struct termios orig_termios;
 };
 
+//this is struct where everything about the editor is stored 
 struct editorConfig E;
 
 // ************************ filetypes ************************
@@ -305,7 +309,8 @@ int is_separator (int c ){
     return isspace(c) || c == '\0' || strchr(",.()+-/*=~%<>[];",c) != NULL;
 }
 
-
+//since it is taking row as the reference so we are not going to mutex here as it will be used in the 
+//calling function
 void editorUpdateSyntax (erow *row){
     row->hl = realloc(row->hl , row->rsize);
     memset(row->hl , HL_NORMAL , row->rsize);            //setting all the values to normal
@@ -446,7 +451,11 @@ void editorUpdateSyntax (erow *row){
         int changed = (row->hl_open_comment != in_comment);
         row->hl_open_comment = in_comment;
         if (changed && row->idx + 1 < E.numrows)
+        {
+            pthread_mutex_lock (&E.row[row->idx + 1].mutex);
             editorUpdateSyntax(&E.row[row->idx + 1]);
+            pthread_mutex_unlock(&E.row[row->idx + 1].mutex);
+        }
 }
 
 int editorSyntaxToColor (int hl){
@@ -463,13 +472,6 @@ int editorSyntaxToColor (int hl){
 }
 
 void editorSelectSyntaxHighlight() {
-    FILE *performance_file;
-    performance_file = fopen("Performance_serial.txt", "a");
-
-    struct timeval start, end;
-    double time_elasped;
-    gettimeofday(&start, NULL);
-
     E.syntax = NULL;
     if (E.filename == NULL) return;
 
@@ -487,21 +489,15 @@ void editorSelectSyntaxHighlight() {
 
                 int filerow;            //after getting the filetype highlighting the file
                 for (filerow = 0; filerow < E.numrows ; filerow++){
+                    pthread_mutex_lock(&E.row[filerow].mutex);
                     editorUpdateSyntax(&E.row[filerow]);
+                    pthread_mutex_unlock(&E.row[filerow].mutex);
                 }
-                break;
+                return;
             }
             i++;
         }
     }
-    gettimeofday(&end, NULL);
-    time_elasped = (end.tv_sec - start.tv_sec) * 1000.0;
-    time_elasped += (end.tv_usec - start.tv_usec) / 1000.0;
-    char temp[1000];
-    sprintf(temp, "Time for Syntax highlighting the file %f\n", time_elasped);
-    fprintf(performance_file, "%s", temp);
-    fclose(performance_file);
-    return;
 }
 
 // ******************************* row operations ******************
@@ -532,7 +528,7 @@ int editorRowRxToCx (erow *row , int rx){
     return cx;
 }
 
-
+//no use of mutex as it is passed as the reference here
 void editorUpdateRow(erow *row){
 
     //count number of tabs
@@ -567,13 +563,19 @@ void editorUpdateRow(erow *row){
 //this function will copy the line from the file into the text editor and append the line onto the editor
 void editorInsertRow (int at , char *s, size_t len)
 {
+
+    // pthread_mutex_lock (&editor_config_mutex);
     if (at < 0 || at > E.numrows ) return;
     E.row = realloc(E.row , sizeof(erow) * (E.numrows + 1) );
     memmove(&E.row[at + 1] , &E.row[at] , sizeof(erow) * (E.numrows - at));
 
     //update the index whenever row is inserted or deleted
     for (int j = at + 1 ; j <= E.numrows ; j++) E.row[j].idx++;
+    // pthread_mutex_unlock(&editor_config_mutex);
 
+    //initialize the mutex and lock it
+    pthread_mutex_init (&(E.row[at].mutex) , NULL );
+    pthread_mutex_lock (&E.row[at].mutex);
     E.row[at].idx = at;        //set the index of the value
 
     //copy the line in the editor row
@@ -587,14 +589,19 @@ void editorInsertRow (int at , char *s, size_t len)
     E.row[at].hl = NULL;
     E.row[at].hl_open_comment = 0;        //line is not a comment;
     editorUpdateRow(&E.row[at]);
+    pthread_mutex_unlock(&E.row[at].mutex);
+
+    // pthread_mutex_lock (&editor_config_mutex);
     E.numrows++;
     E.dirty++;                //can get the sense of how dirty the file is
+    // pthread_mutex_unlock (&editor_config_mutex);
 }
 
 void editorFreeRow(erow *row){
     free(row->render);
     free(row->chars);
     free(row->hl);
+    pthread_mutex_destroy(&row->mutex);
 }
 
 //for deleting the row
@@ -608,9 +615,10 @@ void editorDelRow (int at){
     E.numrows--;
     E.dirty++;
 }
-
+//not using mutex as it passed as the reference here
 void editorRowInsertChar (erow *row , int at , int c){
     //at is allowed to go past the end of the string in which case the character should be inserted at the end of the string
+    // pthread_mutex_lock (&row->mutex);
     if (at < 0 || at > row->size) at = row->size;
     row->chars = realloc(row->chars , row->size + 2);           //+2 is because we have to make room for the null byte
 
@@ -619,10 +627,16 @@ void editorRowInsertChar (erow *row , int at , int c){
     row->size++;
     row->chars[at] = c;
     editorUpdateRow(row);                 //include tabs and everything
+    // pthread_mutex_unlock(&row->mutex);
+
+    // pthread_mutex_lock (&editor_config_mutex);
     E.dirty++;
+    // pthread_mutex_unlock(&editor_config_mutex);
+
 }
 
 //append the string at the end of the row
+//againg row is passed as the reference so dont use mutex
 void editorRowAppendString (erow *row , char *s , size_t len){
     row->chars = realloc(row->chars , row->size + len + 1);
     memcpy (&row->chars[row->size] , s, len);
@@ -632,6 +646,7 @@ void editorRowAppendString (erow *row , char *s , size_t len){
     E.dirty++;
 }
 
+//again row is passed as the reference so dont use mutex 
 void editorRowDelChar(erow *row , int at){
     if (at < 0 || at >= row->size) return;        //can't go past the line
     memmove (&row->chars[at] , &row->chars[at + 1] , row->size - at);
@@ -646,7 +661,11 @@ void editorInsertChar (int c){
         editorInsertRow(E.numrows , "", 0);
     }
     //insert at the cursor position
+
+    //calling the mutex as the 
+    pthread_mutex_lock (&E.row[E.cy].mutex);
     editorRowInsertChar(&E.row[E.cy] , E.cx , c);
+    pthread_mutex_unlock(&E.row[E.cy].mutex);
     E.cx++;              //next character inserted at the next position
 }
 
@@ -655,12 +674,14 @@ void editorInsertNewLine (){
     if (E.cx == 0){
         editorInsertRow(E.cy , "" , 0);
     }else{
+        pthread_mutex_lock (&E.row[E.cy].mutex);
         erow *row = &E.row[E.cy];
         editorInsertRow(E.cy + 1 , &row->chars[E.cx] , row->size - E.cx);
         row = &E.row[E.cy];                 //editorInsertRow may move the memory around and make the pointer invalid ; so to stop from that
         row->size = E.cx;
         row->chars[row->size] = '\0';
         editorUpdateRow(row);
+        pthread_mutex_unlock(&E.row[E.cy].mutex);
     }
     E.cy++;
     E.cx = 0;
@@ -671,19 +692,24 @@ void editorDelChar (){
     if (E.cx == 0 && E.cy == 0 )return;          //at the beginning of the file
     
     
+    pthread_mutex_lock(&E.row[E.cy].mutex);
     erow *row = &E.row[E.cy];
     if (E.cx > 0){
+
         editorRowDelChar(row , E.cx - 1);
         E.cx--;
     }
     else
     {
+        pthread_mutex_lock(&E.row[E.cy - 1].mutex);
         E.cx = E.row[E.cy - 1].size;
         editorRowAppendString(&E.row[E.cy - 1] , row->chars , row->size);
+        pthread_mutex_unlock(&E.row[E.cy - 1].mutex);
+        pthread_mutex_unlock(&E.row[E.cy].mutex);
         editorDelRow(E.cy);
         E.cy--;
     }
-
+    pthread_mutex_unlock(&E.row[E.cy].mutex);
 }
 
 // *******************************io file **************************
@@ -816,6 +842,8 @@ void editorFindCallback (char *query , int key) {
         current += direction;           //depending on the direction change the value of the current
                                         //if positive increment in the positive direction
                                         //else negative
+        
+        
         if (current == -1) current = E.numrows - 1;
         else if (current == E.numrows) current = 0;
 
@@ -957,11 +985,6 @@ void editorMoveCursor(int key)
 void editorProcessKeypress () {
     static int quit_times = QUIT_TIME;
     int c = editorReadKey();
-    FILE *performance_file;
-
-    struct timeval start, end;
-    double time_elasped;
-    char temp[1000];
     // printf("%c" , c);
     switch (c){
         case '\r':
@@ -982,20 +1005,7 @@ void editorProcessKeypress () {
             break;
 
         case CTRL_KEY('s'):
-            
-            performance_file = fopen("Performance_serial.txt", "a");
-
-            gettimeofday(&start, NULL);
-
             editorSave();
-            gettimeofday(&end, NULL);
-            time_elasped = (end.tv_sec - start.tv_sec) * 1000.0;
-            time_elasped += (end.tv_usec - start.tv_usec) / 1000.0;
-            
-            sprintf(temp, "Time for saving the file %f\n", time_elasped);
-            fprintf(performance_file, "%s", temp);
-            fclose(performance_file);
-
             break;
 
         case HOME_KEY:
@@ -1233,6 +1243,7 @@ void editorSetStatusMessage (const char *fmt , ...){
 
 // ********************************** init ****************************
 void initEditor() {
+    pthread_mutex_lock (&editor_config_mutex);
     E.cx = 0;                         //horizontal is x
     E.cy = 0;                         //vertical is y
     E.rx = 0;
@@ -1247,6 +1258,7 @@ void initEditor() {
     E.syntax = NULL;                   //there is no file type for now
     if (getWindowSize(&E.screenrows , &E.screencols) == -1) die("get window size");
     E.screenrows -=2;                     //for the status ; decreases the display area ; making the last row as the status bar
+    pthread_mutex_unlock (&editor_config_mutex);
 }
 
 
@@ -1258,48 +1270,14 @@ void initEditor() {
 
 int main(int argc , char *argv[]) 
 {
+ 
+pthread_mutex_init (&editor_config_mutex , NULL);  
   enableRawMode();
   initEditor();
 
-  fclose(fopen("Performance_serial.txt", "w"));
   if (argc >= 2){
-      //this is to measure the time
-        FILE *performance_file;
-        performance_file = fopen ("Performance_serial.txt" , "a");
-
-        struct timeval start , end;
-		double time_elasped;
-		gettimeofday (&start , NULL);
-
-        editorOpen(argv[1]);
-        gettimeofday(&end , NULL);
-		time_elasped = (end.tv_sec - start.tv_sec) * 1000.0;
-		time_elasped += (end.tv_usec - start.tv_usec) / 1000.0;
-		char temp[1000];
-		sprintf (temp , "Time for opening the file %f\n" ,time_elasped );
-		fprintf(performance_file , "%s" ,temp );
-      	fclose (performance_file);
-
-    	
+      editorOpen(argv[1]);
   }
-
-  FILE *performance_file;
-  performance_file = fopen("Performance_serial.txt", "a");
-
-  struct timeval start, end;
-  double time_elasped;
-  gettimeofday(&start, NULL);
-
-  //measuring the time for editorOpen
-  editorRefreshScreen();
-
-  gettimeofday(&end, NULL);
-  time_elasped = (end.tv_sec - start.tv_sec) * 1000.0;
-  time_elasped += (end.tv_usec - start.tv_usec) / 1000.0;
-  char temp[100];
-  sprintf(temp, "Time for refreshing the screen %f milliseconds\n", time_elasped);
-  fprintf(performance_file, "%s", temp);
-  fclose(performance_file);
 
   editorSetStatusMessage ("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
   while (1){

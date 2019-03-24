@@ -1,0 +1,4 @@
+Time for Syntax highlighting the file 0.499000
+Time for opening the file 8589.164000 milliseconds
+Time for refreshing the screen 0.136000 milliseconds
+Time for saving the file 197.346000
